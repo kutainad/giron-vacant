@@ -1887,6 +1887,48 @@ function showToast(msg, isErr) {
   setTimeout(() => t.className = 'toast', 2200);
 }
 // init: fill cat filter + try cloud
+const OLD_KEYS = ['giron_tracker_v1', 'giron_tracker_sync_v1', 'gironTracker_v1', 'giron_tracker'];
+
+function hasRealData(st) {
+  if (!st) return false;
+  const vals = Object.values(st);
+  return vals.some(s => s && (s.status !== 'pending' || s.date || s.note));
+}
+
+function migrateLocalToCloud() {
+  // מחפש נתונים ישנים ב-localStorage ועולה אותם לענן אם לענן אין עדיין כלום
+  for (const k of OLD_KEYS) {
+    if (k === LS_KEY) continue;
+    try {
+      const raw = localStorage.getItem(k);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      const st = (parsed && parsed.state) ? parsed.state : parsed;
+      if (hasRealData(st)) {
+        // בדוק מה יש בענן כרגע
+        const cfg = loadCfg();
+        return fetch('https://api.jsonbin.io/v3/b/' + cfg.binId + '/latest', {
+          headers: { 'X-Master-Key': cfg.key }
+        }).then(r => r.json()).then(j => {
+          const cloudData = (j && j.record && j.record.state) || {};
+          if (!hasRealData(cloudData)) {
+            // הענן ריק — מעלה את הנתונים הישנים
+            const merged = Object.assign({}, cloudData, st);
+            applyState(merged);
+            return pushCloud().then(() => {
+              showToast('☁️ העלה נתונים ישנים לענן (' + Object.keys(merged).filter(id => merged[id].status !== 'pending').length + ' סימונים)');
+              updateStats();
+              return true;
+            });
+          }
+          return false;
+        }).catch(() => false);
+      }
+    } catch(e) {}
+  }
+  return Promise.resolve(false);
+}
+
 (function init() {
   const cf = document.getElementById('catFilter');
   const cats = new Set();
@@ -1895,7 +1937,14 @@ function showToast(msg, isErr) {
   syncUi();
   const cfg = loadCfg();
   if (cfg.binId && cfg.key) {
-    pullCloud().then(() => { updateStats(); showToast('☁️ נטען מהענן'); });
+    pullCloud().then(() => {
+      updateStats();
+      // אחרי טעינת הענן — בדוק אם צריך להעלות נתונים ישנים מקומיים
+      return migrateLocalToCloud();
+    }).then(() => {
+      updateStats();
+      showToast('☁️ נטען מהענן');
+    });
   } else {
     try {
       const saved = JSON.parse(localStorage.getItem(LS_KEY));
