@@ -1684,11 +1684,12 @@
 <script>
 const LS_KEY = 'giron_tracker_sync_v1';
 const CFG_KEY = 'giron_tracker_cfg_v1';
+const DEFAULT_CFG = { binId: '6a97eef2f5f4af5e29603cf8', key: '$2a$10$Mo79nkShmWdnLxq6LDZFYuHVuFVc3LSVJ3dw6zKld8HgySkA5Mkxq' };
 let saveTimer = null;
 let lastState = '';
 
 function loadCfg() {
-  try { return JSON.parse(localStorage.getItem(CFG_KEY)) || {}; } catch(e) { return {}; }
+  try { return JSON.parse(localStorage.getItem(CFG_KEY)) || DEFAULT_CFG; } catch(e) { return DEFAULT_CFG; }
 }
 function saveCfg(c) {
   localStorage.setItem(CFG_KEY, JSON.stringify(c));
