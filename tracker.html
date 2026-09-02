@@ -3,13 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>מעקב פניות מרכז גירון</title>
+<title>מעקב פניות מרכז גירון — מסונכרן</title>
 <style>
   body { font-family:'Segoe UI',Arial,sans-serif; background:#f3f5f9; color:#222; margin:0; padding:14px; }
   .wrap { max-width:1050px; margin:0 auto; }
   .header { background:linear-gradient(135deg,#5b2a86,#e31e63); color:#fff; border-radius:14px; padding:18px; text-align:center; margin-bottom:12px; }
   .header h1 { margin:0; font-size:1.25em; }
   .header p { margin:4px 0 0; opacity:.9; font-size:.85em; }
+  .sync-status { font-size:.8em; padding:3px 12px; border-radius:12px; display:inline-block; margin-top:6px; background:rgba(255,255,255,.2); }
+  .sync-status.cloud { background:#25D366; }
+  .sync-status.local { background:#ff9800; }
   .stats { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-bottom:12px; }
   .stat { background:#fff; border-radius:10px; padding:8px 16px; font-size:.85em; box-shadow:0 1px 3px rgba(0,0,0,.07); }
   .stat b { font-size:1.2em; display:block; text-align:center; }
@@ -18,6 +21,7 @@
   .toolbar select { padding:8px; border-radius:10px; border:2px solid #ddd; font-size:.85em; }
   .btn { background:#0f3d5c; color:#fff; border:none; padding:8px 14px; border-radius:10px; cursor:pointer; font-size:.82em; font-weight:700; }
   .btn.green { background:#25D366; }
+  .btn.orange { background:#e67e22; }
   table { width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.07); font-size:.85em; }
   th { background:#5b2a86; color:#fff; padding:8px 8px; text-align:right; white-space:nowrap; }
   td { border-top:1px solid #eee; padding:6px 8px; vertical-align:middle; }
@@ -30,19 +34,22 @@
   tr.row-replied td { background:#f0fff4; }
   tr.row-deal td { background:#e6ffe6; }
   tr.row-no td { opacity:.55; }
-  .filters { display:flex; gap:8px; margin:8px 0; flex-wrap:wrap; }
-  .chip { padding:5px 14px; border-radius:16px; cursor:pointer; font-size:.8em; border:1px solid #ccc; background:#fff; }
-  .chip.active { background:#5b2a86; color:#fff; border-color:#5b2a86; }
   .footer { text-align:center; color:#999; font-size:.78em; margin:14px 0; }
-  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#222; color:#fff; padding:10px 22px; border-radius:20px; font-size:.9em; opacity:0; transition:.3s; }
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#222; color:#fff; padding:10px 22px; border-radius:20px; font-size:.9em; opacity:0; transition:.3s; z-index:99; }
   .toast.show { opacity:1; }
+  .toast.err { background:#c0392b; }
+  .config-wrap { display:none; background:#fff; border-radius:12px; padding:14px; margin-bottom:10px; box-shadow:0 2px 8px rgba(0,0,0,.07); }
+  .config-wrap.open { display:block; }
+  .config-wrap label { font-size:.8em; font-weight:700; display:block; margin-top:8px; }
+  .config-wrap input { width:100%; padding:7px; border-radius:8px; border:1px solid #ccc; font-size:.85em; box-sizing:border-box; margin-top:3px; direction:ltr; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="header">
-    <h1>📊 מעקב פניות — מרכז גירון</h1>
-    <p>131 עסקים · סימון סטטוס + שמירה אוטומטית בדפדפן · נדב 052-3668488</p>
+    <h1>📊 מעקב פניות — מרכז גירון (מסונכרן)</h1>
+    <p>100 עסקים · כל השינויים נשמרים בענן — כל מי שפותח את הקישור רואה את אותו מצב</p>
+    <span class="sync-status" id="syncStatus">⏳ בודק חיבור...</span>
   </div>
   <div class="stats" id="stats"></div>
   <div class="toolbar">
@@ -51,11 +58,22 @@
     <select id="statusFilter" onchange="applyFilters()"><option value="">כל הסטטוסים</option><option value="pending">🔵 לא נשלח</option><option value="sent">🟡 נשלח</option><option value="replied">🟢 ענה</option><option value="tour">📅 סיור</option><option value="deal">🤝 סיכם</option><option value="no">⚫ לא מעוניין</option></select>
   </div>
   <div class="toolbar">
-    <button class="btn green" onclick="exportJSON()">⬇️ ייצוא גיבוי (JSON)</button>
-    <button class="btn" onclick="document.getElementById('fileInput').click()">⬆️ ייבוא גיבוי</button>
+    <button class="btn green" onclick="exportJSON()">⬇️ ייצוא גיבוי</button>
+    <button class="btn" onclick="document.getElementById('fileInput').click()">⬆️ ייבוא</button>
     <button class="btn" onclick="window.print()">🖨️ הדפס</button>
+    <button class="btn orange" onclick="toggleConfig()">⚙️ הגדרות סנכרון</button>
     <input type="file" id="fileInput" accept=".json" style="display:none" onchange="importJSON(event)">
-    <button class="btn" onclick="resetAll()">🗑️ איפוס</button>
+  </div>
+  <div class="config-wrap" id="configWrap">
+    <b>🔗 הגדרות סנכרון ענן (JSONBin)</b><br>
+    <span style="font-size:.8em;color:#666">כדי שכל הצדדים יראו את אותו מצב — הדביקו כאן את פרטי ה-JSONBin. בלי זה הנתונים נשמרים רק בדפדפן המקומי.</span>
+    <label>Bin ID</label><input type="text" id="cfgBinId" placeholder="מהכתובת: https://api.jsonbin.io/v3/b/XXXXX/latest">
+    <label>X-Master-Key</label><input type="text" id="cfgKey" placeholder="המפתח האישי שלך מ-jsonbin.io">
+    <div style="margin-top:10px">
+      <button class="btn green" onclick="saveConfig()">💾 שמור והתחבר</button>
+      <button class="btn" onclick="testCloud()">🔌 בדוק חיבור</button>
+    </div>
+    <div id="cloudMsg" style="font-size:.8em;margin-top:6px"></div>
   </div>
   <table>
     <thead><tr><th>עסק</th><th>קטגוריה</th><th>טלפון</th><th>סטטוס</th><th>תאריך</th><th>הערות</th><th>💬</th></tr></thead>
@@ -63,7 +81,7 @@
   <td><b>מכבסת שרית</b><br><small class="muted">אחוזה 80, רעננה</small></td>
   <td class="cat">👔 ניקוי יבש</td>
   <td class="phone"><a href="tel:097412085">097412085</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -71,15 +89,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097412085">📞</a></td>
 </tr>
 <tr data-id="2" data-name="מכבסת קלינרס" data-cat="👔 ניקוי יבש">
   <td><b>מכבסת קלינרס</b><br><small class="muted">אחוזה 53, רעננה</small></td>
   <td class="cat">👔 ניקוי יבש</td>
   <td class="phone"><a href="tel:0586729792">0586729792</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -87,15 +105,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972586729792?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="3" data-name="מכבסת הכובס" data-cat="👔 ניקוי יבש">
   <td><b>מכבסת הכובס</b><br><small class="muted">סשה ארגוב 23, רעננה</small></td>
   <td class="cat">👔 ניקוי יבש</td>
   <td class="phone"><a href="tel:0775060501">0775060501</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -103,15 +121,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:0775060501">📞</a></td>
 </tr>
 <tr data-id="4" data-name="מכבסת הבית" data-cat="👔 ניקוי יבש">
   <td><b>מכבסת הבית</b><br><small class="muted">מוצקין 36, רעננה</small></td>
   <td class="cat">👔 ניקוי יבש</td>
   <td class="phone"><a href="tel:0772060407">0772060407</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -119,15 +137,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:0772060407">📞</a></td>
 </tr>
 <tr data-id="5" data-name="טופ קלין" data-cat="👔 ניקוי יבש">
   <td><b>טופ קלין</b><br><small class="muted">אוסטרובסקי 36, רעננה</small></td>
   <td class="cat">👔 ניקוי יבש</td>
   <td class="phone"><a href="tel:097712321">097712321</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -135,15 +153,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097712321">📞</a></td>
 </tr>
 <tr data-id="6" data-name="מכבסת לינדר" data-cat="👔 ניקוי יבש">
   <td><b>מכבסת לינדר</b><br><small class="muted">רמב&quot;ם 5, רעננה</small></td>
   <td class="cat">👔 ניקוי יבש</td>
   <td class="phone"><a href="tel:097426419">097426419</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -151,15 +169,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097426419">📞</a></td>
 </tr>
 <tr data-id="7" data-name="ניקיטה" data-cat="👔 ניקוי יבש">
   <td><b>ניקיטה</b><br><small class="muted">אחוזה 153, רעננה</small></td>
   <td class="cat">👔 ניקוי יבש</td>
   <td class="phone"><a href="tel:0509556980">0509556980</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -167,15 +185,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972509556980?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="8" data-name="מיסטר קלין" data-cat="👔 ניקוי יבש">
   <td><b>מיסטר קלין</b><br><small class="muted">היצירה 7, רעננה</small></td>
   <td class="cat">👔 ניקוי יבש</td>
   <td class="phone"><a href="tel:0774007153">0774007153</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -183,15 +201,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:0774007153">📞</a></td>
 </tr>
 <tr data-id="9" data-name="קלין שופ" data-cat="👔 ניקוי יבש">
   <td><b>קלין שופ</b><br><small class="muted">בר אילן 3, רעננה</small></td>
   <td class="cat">👔 ניקוי יבש</td>
   <td class="phone"><a href="tel:097421432">097421432</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -199,15 +217,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097421432">📞</a></td>
 </tr>
 <tr data-id="10" data-name="המכבסה שלי" data-cat="👔 ניקוי יבש">
   <td><b>המכבסה שלי</b><br><small class="muted">עקיבא 95, רעננה</small></td>
   <td class="cat">👔 ניקוי יבש</td>
   <td class="phone"><a href="tel:099562111">099562111</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -215,15 +233,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:099562111">📞</a></td>
 </tr>
 <tr data-id="11" data-name="מכבסה חיים" data-cat="👔 ניקוי יבש">
   <td><b>מכבסה חיים</b><br><small class="muted">אחוזה 141, רעננה</small></td>
   <td class="cat">👔 ניקוי יבש</td>
   <td class="phone"><a href="tel:097426836">097426836</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -231,15 +249,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097426836">📞</a></td>
 </tr>
 <tr data-id="12" data-name="מכבסת גל" data-cat="👔 ניקוי יבש">
   <td><b>מכבסת גל</b><br><small class="muted">חנקין 5, רעננה</small></td>
   <td class="cat">👔 ניקוי יבש</td>
   <td class="phone"><a href="tel:0723120828">0723120828</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -247,15 +265,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:0723120828">📞</a></td>
 </tr>
 <tr data-id="13" data-name="דה קלינרס" data-cat="👔 ניקוי יבש">
   <td><b>דה קלינרס</b><br><small class="muted">קלאוזנר 2, רעננה</small></td>
   <td class="cat">👔 ניקוי יבש</td>
   <td class="phone"><a href="tel:099550777">099550777</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -263,15 +281,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:099550777">📞</a></td>
 </tr>
 <tr data-id="14" data-name="מכבסת בועות סבון" data-cat="👔 ניקוי יבש">
   <td><b>מכבסת בועות סבון</b><br><small class="muted">בורוכוב 4, רעננה</small></td>
   <td class="cat">👔 ניקוי יבש</td>
   <td class="phone"><a href="tel:0559719371">0559719371</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -279,15 +297,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972559719371?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="15" data-name="שוק רעננה" data-cat="🛒 מכולות">
   <td><b>שוק רעננה</b><br><small class="muted">הסדנא 2, רעננה</small></td>
   <td class="cat">🛒 מכולות</td>
   <td class="phone"><a href="tel:097412550">097412550</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -295,15 +313,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097412550">📞</a></td>
 </tr>
 <tr data-id="16" data-name="איציק חן 2000" data-cat="🛒 מכולות">
   <td><b>איציק חן 2000</b><br><small class="muted">אוסטרובסקי 38, רעננה</small></td>
   <td class="cat">🛒 מכולות</td>
   <td class="phone"><a href="tel:097741203">097741203</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -311,15 +329,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097741203">📞</a></td>
 </tr>
 <tr data-id="17" data-name="מינימרקט היובל" data-cat="🛒 מכולות">
   <td><b>מינימרקט היובל</b><br><small class="muted">היובל 2, רעננה</small></td>
   <td class="cat">🛒 מכולות</td>
   <td class="phone"><a href="tel:097419743">097419743</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -327,15 +345,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097419743">📞</a></td>
 </tr>
 <tr data-id="18" data-name="סופר המקום שלנו" data-cat="🛒 מכולות">
   <td><b>סופר המקום שלנו</b><br><small class="muted">עקיבא 95, רעננה</small></td>
   <td class="cat">🛒 מכולות</td>
   <td class="phone"><a href="tel:097668844">097668844</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -343,15 +361,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097668844">📞</a></td>
 </tr>
 <tr data-id="19" data-name="La Perle" data-cat="🛒 מכולות">
   <td><b>La Perle</b><br><small class="muted">אחוזה 117, רעננה</small></td>
   <td class="cat">🛒 מכולות</td>
   <td class="phone"><a href="tel:0557715672">0557715672</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -359,15 +377,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972557715672?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="20" data-name="מינימרקט משה" data-cat="🛒 מכולות">
   <td><b>מינימרקט משה</b><br><small class="muted">בורוכוב 92, רעננה</small></td>
   <td class="cat">🛒 מכולות</td>
   <td class="phone"><a href="tel:097417618">097417618</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -375,15 +393,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097417618">📞</a></td>
 </tr>
 <tr data-id="21" data-name="הסופר של שלמה" data-cat="🛒 מכולות">
   <td><b>הסופר של שלמה</b><br><small class="muted">מוצקין 36, רעננה</small></td>
   <td class="cat">🛒 מכולות</td>
   <td class="phone"><a href="tel:097710726">097710726</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -391,15 +409,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097710726">📞</a></td>
 </tr>
 <tr data-id="22" data-name="אדום ירוק" data-cat="🛒 מכולות">
   <td><b>אדום ירוק</b><br><small class="muted">וייצמן 273, רעננה</small></td>
   <td class="cat">🛒 מכולות</td>
   <td class="phone"><a href="tel:0543548814">0543548814</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -407,15 +425,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972543548814?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="23" data-name="רד מרקט" data-cat="🛒 מכולות">
   <td><b>רד מרקט</b><br><small class="muted">אוסטרובסקי 38, רעננה</small></td>
   <td class="cat">🛒 מכולות</td>
   <td class="phone"><a href="tel:0542395552">0542395552</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -423,15 +441,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972542395552?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="24" data-name="טרי על הבוקר" data-cat="🛒 מכולות">
   <td><b>טרי על הבוקר</b><br><small class="muted">אחוזה 178, רעננה</small></td>
   <td class="cat">🛒 מכולות</td>
   <td class="phone"><a href="tel:039639639">039639639</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -439,15 +457,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:039639639">📞</a></td>
 </tr>
 <tr data-id="25" data-name="סופר יודה" data-cat="🛒 מכולות">
   <td><b>סופר יודה</b><br><small class="muted">דרך ירושלים 13, רעננה</small></td>
   <td class="cat">🛒 מכולות</td>
   <td class="phone"><a href="tel:097605454">097605454</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -455,15 +473,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097605454">📞</a></td>
 </tr>
 <tr data-id="26" data-name="טיפ טוב" data-cat="🛒 מכולות">
   <td><b>טיפ טוב</b><br><small class="muted">שברץ 22, רעננה</small></td>
   <td class="cat">🛒 מכולות</td>
   <td class="phone"><a href="tel:097483654">097483654</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -471,15 +489,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097483654">📞</a></td>
 </tr>
 <tr data-id="27" data-name="דור מרקט" data-cat="🛒 מכולות">
   <td><b>דור מרקט</b><br><small class="muted">לוי אשכול 2, רעננה</small></td>
   <td class="cat">🛒 מכולות</td>
   <td class="phone"><a href="tel:0534434501">0534434501</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -487,15 +505,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972534434501?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="28" data-name="הצרכניה" data-cat="🛒 מכולות">
   <td><b>הצרכניה</b><br><small class="muted">אוסטרובסקי 9, רעננה</small></td>
   <td class="cat">🛒 מכולות</td>
   <td class="phone"><a href="tel:0546766130">0546766130</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -503,15 +521,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972546766130?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="29" data-name="ריץ מרקט" data-cat="🛒 מכולות">
   <td><b>ריץ מרקט</b><br><small class="muted">דבורה עומר 3, רעננה</small></td>
   <td class="cat">🛒 מכולות</td>
   <td class="phone"><a href="tel:0539519414">0539519414</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -519,15 +537,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972539519414?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="30" data-name="מכולת רמב&quot;ם" data-cat="🛒 מכולות">
   <td><b>מכולת רמב&quot;ם</b><br><small class="muted">בורוכוב 108, רעננה</small></td>
   <td class="cat">🛒 מכולות</td>
   <td class="phone"><a href="tel:097487450">097487450</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -535,15 +553,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097487450">📞</a></td>
 </tr>
 <tr data-id="31" data-name="מכולת סוניה" data-cat="🛒 מכולות">
   <td><b>מכולת סוניה</b><br><small class="muted">אחוזה 88, רעננה</small></td>
   <td class="cat">🛒 מכולות</td>
   <td class="phone"><a href="tel:097426484">097426484</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -551,15 +569,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097426484">📞</a></td>
 </tr>
 <tr data-id="32" data-name="מינימרקט שכונתית" data-cat="🛒 מכולות">
   <td><b>מינימרקט שכונתית</b><br><small class="muted">החי&quot;ל 39, רעננה</small></td>
   <td class="cat">🛒 מכולות</td>
   <td class="phone"><a href="tel:097714267">097714267</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -567,15 +585,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097714267">📞</a></td>
 </tr>
 <tr data-id="33" data-name="סאבמרקט" data-cat="🛒 מכולות">
   <td><b>סאבמרקט</b><br><small class="muted">הנגב 33, רעננה</small></td>
   <td class="cat">🛒 מכולות</td>
   <td class="phone"><a href="tel:097426868">097426868</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -583,15 +601,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097426868">📞</a></td>
 </tr>
 <tr data-id="34" data-name="יבולי השרון" data-cat="🛒 מכולות">
   <td><b>יבולי השרון</b><br><small class="muted">המלאכה 18, רעננה</small></td>
   <td class="cat">🛒 מכולות</td>
   <td class="phone"><a href="tel:0543522555">0543522555</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -599,15 +617,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972543522555?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="35" data-name="אמ אנד או" data-cat="🛒 מכולות">
   <td><b>אמ אנד או</b><br><small class="muted">מרדכי אנילביץ&#x27; 25, רעננה</small></td>
   <td class="cat">🛒 מכולות</td>
   <td class="phone"><a href="tel:0549459657">0549459657</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -615,15 +633,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972549459657?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="36" data-name="ניגוב עם" data-cat="🍽️ מסעדות">
   <td><b>ניגוב עם</b><br><small class="muted">החרושת 2, רעננה</small></td>
   <td class="cat">🍽️ מסעדות</td>
   <td class="phone"><a href="tel:097411201">097411201</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -631,15 +649,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097411201">📞</a></td>
 </tr>
 <tr data-id="37" data-name="לה טוסקנה" data-cat="🍽️ מסעדות">
   <td><b>לה טוסקנה</b><br><small class="muted">השוק 2, רעננה</small></td>
   <td class="cat">🍽️ מסעדות</td>
   <td class="phone"><a href="tel:0777005851">0777005851</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -647,15 +665,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:0777005851">📞</a></td>
 </tr>
 <tr data-id="38" data-name="נג&#x27;ימה" data-cat="🍽️ מסעדות">
   <td><b>נג&#x27;ימה</b><br><small class="muted">אליעזר יפה 5, רעננה</small></td>
   <td class="cat">🍽️ מסעדות</td>
   <td class="phone"><a href="tel:097443299">097443299</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -663,15 +681,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097443299">📞</a></td>
 </tr>
 <tr data-id="39" data-name="באפלו" data-cat="🍽️ מסעדות">
   <td><b>באפלו</b><br><small class="muted">החרושת 24, רעננה</small></td>
   <td class="cat">🍽️ מסעדות</td>
   <td class="phone"><a href="tel:097406711">097406711</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -679,15 +697,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097406711">📞</a></td>
 </tr>
 <tr data-id="40" data-name="קאמי" data-cat="🍽️ מסעדות">
   <td><b>קאמי</b><br><small class="muted">וייצמן 273, רעננה</small></td>
   <td class="cat">🍽️ מסעדות</td>
   <td class="phone"><a href="tel:099635775">099635775</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -695,15 +713,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:099635775">📞</a></td>
 </tr>
 <tr data-id="41" data-name="לבריאות" data-cat="🍽️ מסעדות">
   <td><b>לבריאות</b><br><small class="muted">העמל 1, רעננה</small></td>
   <td class="cat">🍽️ מסעדות</td>
   <td class="phone"><a href="tel:0545447300">0545447300</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -711,15 +729,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972545447300?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="42" data-name="גריל האוס B12" data-cat="🍽️ מסעדות">
   <td><b>גריל האוס B12</b><br><small class="muted">אחוזה 124, רעננה</small></td>
   <td class="cat">🍽️ מסעדות</td>
   <td class="phone"><a href="tel:098825559">098825559</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -727,15 +745,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:098825559">📞</a></td>
 </tr>
 <tr data-id="43" data-name="Mushi Mushi" data-cat="🍽️ מסעדות">
   <td><b>Mushi Mushi</b><br><small class="muted">התקווה 16, רעננה</small></td>
   <td class="cat">🍽️ מסעדות</td>
   <td class="phone"><a href="tel:0772125154">0772125154</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -743,15 +761,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:0772125154">📞</a></td>
 </tr>
 <tr data-id="44" data-name="מקור הטוניסאי" data-cat="🍽️ מסעדות">
   <td><b>מקור הטוניסאי</b><br><small class="muted">המלאכה 18, רעננה</small></td>
   <td class="cat">🍽️ מסעדות</td>
   <td class="phone"><a href="tel:097722370">097722370</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -759,15 +777,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097722370">📞</a></td>
 </tr>
 <tr data-id="45" data-name="מקום בלב" data-cat="🍽️ מסעדות">
   <td><b>מקום בלב</b><br><small class="muted">פרדס משותף 5, רעננה</small></td>
   <td class="cat">🍽️ מסעדות</td>
   <td class="phone"><a href="tel:097741575">097741575</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -775,15 +793,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097741575">📞</a></td>
 </tr>
 <tr data-id="46" data-name="קווין לו" data-cat="🍽️ מסעדות">
   <td><b>קווין לו</b><br><small class="muted">ברנר 6, רעננה</small></td>
   <td class="cat">🍽️ מסעדות</td>
   <td class="phone"><a href="tel:099790009">099790009</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -791,15 +809,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:099790009">📞</a></td>
 </tr>
 <tr data-id="47" data-name="עידו בשרים" data-cat="🍽️ מסעדות">
   <td><b>עידו בשרים</b><br><small class="muted">דרך ירושלים 13, רעננה</small></td>
   <td class="cat">🍽️ מסעדות</td>
   <td class="phone"><a href="tel:0544341174">0544341174</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -807,15 +825,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972544341174?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="48" data-name="אוקיאמה סושי" data-cat="🍽️ מסעדות">
   <td><b>אוקיאמה סושי</b><br><small class="muted">בן גוריון 3, רעננה</small></td>
   <td class="cat">🍽️ מסעדות</td>
   <td class="phone"><a href="tel:0778066656">0778066656</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -823,15 +841,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:0778066656">📞</a></td>
 </tr>
 <tr data-id="49" data-name="לאנץ&#x27; בוקס" data-cat="🍽️ מסעדות">
   <td><b>לאנץ&#x27; בוקס</b><br><small class="muted">הסדנא 15, רעננה</small></td>
   <td class="cat">🍽️ מסעדות</td>
   <td class="phone"><a href="tel:0544203925">0544203925</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -839,15 +857,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972544203925?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="50" data-name="צוצ Smokehouse" data-cat="🍽️ מסעדות">
   <td><b>צוצ Smokehouse</b><br><small class="muted">התדהר 7, רעננה</small></td>
   <td class="cat">🍽️ מסעדות</td>
   <td class="phone"><a href="tel:0543155776">0543155776</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -855,15 +873,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972543155776?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="51" data-name="עזיזה" data-cat="🍽️ מסעדות">
   <td><b>עזיזה</b><br><small class="muted">החרושת 18, רעננה</small></td>
   <td class="cat">🍽️ מסעדות</td>
   <td class="phone"><a href="tel:0534448784">0534448784</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -871,15 +889,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972534448784?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="52" data-name="Bff" data-cat="🍽️ מסעדות">
   <td><b>Bff</b><br><small class="muted">אחוזה 130, רעננה</small></td>
   <td class="cat">🍽️ מסעדות</td>
   <td class="phone"><a href="tel:099652241">099652241</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -887,15 +905,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:099652241">📞</a></td>
 </tr>
 <tr data-id="53" data-name="מאמא מרקט בוקובזה" data-cat="🍽️ מסעדות">
   <td><b>מאמא מרקט בוקובזה</b><br><small class="muted">זרחין 3, רעננה</small></td>
   <td class="cat">🍽️ מסעדות</td>
   <td class="phone"><a href="tel:0536666701">0536666701</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -903,15 +921,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972536666701?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="54" data-name="דליבר" data-cat="🍽️ מסעדות">
   <td><b>דליבר</b><br><small class="muted">המלאכה 18, רעננה</small></td>
   <td class="cat">🍽️ מסעדות</td>
   <td class="phone"><a href="tel:0547680246">0547680246</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -919,15 +937,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972547680246?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="55" data-name="Chef Shirel Dana" data-cat="🍽️ מסעדות">
   <td><b>Chef Shirel Dana</b><br><small class="muted">החרושת 54, רעננה</small></td>
   <td class="cat">🍽️ מסעדות</td>
   <td class="phone"><a href="tel:0539208263">0539208263</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -935,15 +953,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972539208263?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="56" data-name="דולצ&#x27;ה" data-cat="🍽️ מסעדות">
   <td><b>דולצ&#x27;ה</b><br><small class="muted">המסגר 1, רעננה</small></td>
   <td class="cat">🍽️ מסעדות</td>
   <td class="phone"><a href="tel:0772302535">0772302535</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -951,15 +969,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:0772302535">📞</a></td>
 </tr>
 <tr data-id="57" data-name="Poke Bar" data-cat="🍽️ מסעדות">
   <td><b>Poke Bar</b><br><small class="muted">הנשיאים 47, רעננה</small></td>
   <td class="cat">🍽️ מסעדות</td>
   <td class="phone"><a href="tel:098616102">098616102</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -967,15 +985,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:098616102">📞</a></td>
 </tr>
 <tr data-id="58" data-name="הטאבון" data-cat="🍽️ מסעדות">
   <td><b>הטאבון</b><br><small class="muted">החרושת 18, רעננה</small></td>
   <td class="cat">🍽️ מסעדות</td>
   <td class="phone"><a href="tel:097463740">097463740</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -983,15 +1001,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097463740">📞</a></td>
 </tr>
 <tr data-id="59" data-name="lstudio" data-cat="💈 מספרות">
   <td><b>lstudio</b><br><small class="muted">המלאכה 4, רעננה</small></td>
   <td class="cat">💈 מספרות</td>
   <td class="phone"><a href="tel:0502328005">0502328005</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -999,15 +1017,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972502328005?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="60" data-name="NY Studio" data-cat="💈 מספרות">
   <td><b>NY Studio</b><br><small class="muted">חנקין 5, רעננה</small></td>
   <td class="cat">💈 מספרות</td>
   <td class="phone"><a href="tel:0587950317">0587950317</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1015,15 +1033,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972587950317?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="61" data-name="מספרת חן מסיקה" data-cat="💈 מספרות">
   <td><b>מספרת חן מסיקה</b><br><small class="muted">אוסטרובסקי 41, רעננה</small></td>
   <td class="cat">💈 מספרות</td>
   <td class="phone"><a href="tel:0777882299">0777882299</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1031,15 +1049,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:0777882299">📞</a></td>
 </tr>
 <tr data-id="62" data-name="Aron studio" data-cat="💈 מספרות">
   <td><b>Aron studio</b><br><small class="muted">אחוזה 131, רעננה</small></td>
   <td class="cat">💈 מספרות</td>
   <td class="phone"><a href="tel:099502772">099502772</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1047,15 +1065,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:099502772">📞</a></td>
 </tr>
 <tr data-id="63" data-name="Ampula Hair" data-cat="💈 מספרות">
   <td><b>Ampula Hair</b><br><small class="muted">בורוכוב 5, רעננה</small></td>
   <td class="cat">💈 מספרות</td>
   <td class="phone"><a href="tel:0543080898">0543080898</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1063,15 +1081,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972543080898?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="64" data-name="ערן הוסיט" data-cat="💈 מספרות">
   <td><b>ערן הוסיט</b><br><small class="muted">הסדנא 3, רעננה</small></td>
   <td class="cat">💈 מספרות</td>
   <td class="phone"><a href="tel:0506867180">0506867180</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1079,15 +1097,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972506867180?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="65" data-name="Eli&#x27;s Barber" data-cat="💈 מספרות">
   <td><b>Eli&#x27;s Barber</b><br><small class="muted">רש&quot;י 4, רעננה</small></td>
   <td class="cat">💈 מספרות</td>
   <td class="phone"><a href="tel:0555003032">0555003032</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1095,15 +1113,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972555003032?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="66" data-name="עיצוב שיער Shimi.L" data-cat="💈 מספרות">
   <td><b>עיצוב שיער Shimi.L</b><br><small class="muted">אחוזה 124, רעננה</small></td>
   <td class="cat">💈 מספרות</td>
   <td class="phone"><a href="tel:097465638">097465638</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1111,15 +1129,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097465638">📞</a></td>
 </tr>
 <tr data-id="67" data-name="Holala" data-cat="💈 מספרות">
   <td><b>Holala</b><br><small class="muted">סשה ארגוב 23, רעננה</small></td>
   <td class="cat">💈 מספרות</td>
   <td class="phone"><a href="tel:097941709">097941709</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1127,15 +1145,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097941709">📞</a></td>
 </tr>
 <tr data-id="68" data-name="מני כהן" data-cat="💈 מספרות">
   <td><b>מני כהן</b><br><small class="muted">בורוכוב 6, רעננה</small></td>
   <td class="cat">💈 מספרות</td>
   <td class="phone"><a href="tel:097414127">097414127</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1143,15 +1161,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097414127">📞</a></td>
 </tr>
 <tr data-id="69" data-name="ליאור שמיאן" data-cat="💈 מספרות">
   <td><b>ליאור שמיאן</b><br><small class="muted">אחוזה 79, רעננה</small></td>
   <td class="cat">💈 מספרות</td>
   <td class="phone"><a href="tel:097711130">097711130</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1159,15 +1177,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097711130">📞</a></td>
 </tr>
 <tr data-id="70" data-name="מישל מרסייה" data-cat="💈 מספרות">
   <td><b>מישל מרסייה</b><br><small class="muted">שברץ 1, רעננה</small></td>
   <td class="cat">💈 מספרות</td>
   <td class="phone"><a href="tel:097602516">097602516</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1175,15 +1193,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097602516">📞</a></td>
 </tr>
 <tr data-id="71" data-name="בן סיימון" data-cat="💈 מספרות">
   <td><b>בן סיימון</b><br><small class="muted">אחוזה 79, רעננה</small></td>
   <td class="cat">💈 מספרות</td>
   <td class="phone"><a href="tel:0542311904">0542311904</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1191,15 +1209,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972542311904?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="72" data-name="Kobi Adir" data-cat="💈 מספרות">
   <td><b>Kobi Adir</b><br><small class="muted">אחוזה 135, רעננה</small></td>
   <td class="cat">💈 מספרות</td>
   <td class="phone"><a href="tel:0507442044">0507442044</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1207,15 +1225,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972507442044?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="73" data-name="הספר שלך" data-cat="💈 מספרות">
   <td><b>הספר שלך</b><br><small class="muted">ז&#x27;בוטינסקי 4, רעננה</small></td>
   <td class="cat">💈 מספרות</td>
   <td class="phone"><a href="tel:0527747515">0527747515</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1223,15 +1241,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972527747515?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="74" data-name="מכון יופי חויה" data-cat="💅 יופי">
   <td><b>מכון יופי חויה</b><br><small class="muted">החי&quot;ל 49, רעננה</small></td>
   <td class="cat">💅 יופי</td>
   <td class="phone"><a href="tel:097728737">097728737</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1239,15 +1257,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097728737">📞</a></td>
 </tr>
 <tr data-id="75" data-name="רינה לניאדו" data-cat="💅 יופי">
   <td><b>רינה לניאדו</b><br><small class="muted">ז&#x27;בוטינסקי 3, רעננה</small></td>
   <td class="cat">💅 יופי</td>
   <td class="phone"><a href="tel:0505626927">0505626927</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1255,15 +1273,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972505626927?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="76" data-name="Bbeauty" data-cat="💅 יופי">
   <td><b>Bbeauty</b><br><small class="muted">אחוזה 96, רעננה</small></td>
   <td class="cat">💅 יופי</td>
   <td class="phone"><a href="tel:0555523239">0555523239</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1271,15 +1289,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972555523239?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="77" data-name="Beautiful" data-cat="💅 יופי">
   <td><b>Beautiful</b><br><small class="muted">אחוזה 88, רעננה</small></td>
   <td class="cat">💅 יופי</td>
   <td class="phone"><a href="tel:0537156230">0537156230</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1287,15 +1305,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972537156230?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="78" data-name="רעננה Muse Institut" data-cat="💅 יופי">
   <td><b>רעננה Muse Institut</b><br><small class="muted">ברנדייס 18, רעננה</small></td>
   <td class="cat">💅 יופי</td>
   <td class="phone"><a href="tel:0547006335">0547006335</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1303,15 +1321,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972547006335?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="79" data-name="מכון היופי של אתי" data-cat="💅 יופי">
   <td><b>מכון היופי של אתי</b><br><small class="muted">לוי אשכול 8, רעננה</small></td>
   <td class="cat">💅 יופי</td>
   <td class="phone"><a href="tel:0509391311">0509391311</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1319,15 +1337,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972509391311?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="80" data-name="נטלי בייוטי" data-cat="💅 יופי">
   <td><b>נטלי בייוטי</b><br><small class="muted">ארלוזורוב 37, רעננה</small></td>
   <td class="cat">💅 יופי</td>
   <td class="phone"><a href="tel:0527888750">0527888750</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1335,15 +1353,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972527888750?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="81" data-name="Dana Nir" data-cat="💅 יופי">
   <td><b>Dana Nir</b><br><small class="muted">אחוזה 146, רעננה</small></td>
   <td class="cat">💅 יופי</td>
   <td class="phone"><a href="tel:097798900">097798900</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1351,15 +1369,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097798900">📞</a></td>
 </tr>
 <tr data-id="82" data-name="טל ומיכל ביוטי" data-cat="💅 יופי">
   <td><b>טל ומיכל ביוטי</b><br><small class="muted">אחוזה 106, רעננה</small></td>
   <td class="cat">💅 יופי</td>
   <td class="phone"><a href="tel:099787111">099787111</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1367,15 +1385,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:099787111">📞</a></td>
 </tr>
 <tr data-id="83" data-name="שוליס" data-cat="💅 יופי">
   <td><b>שוליס</b><br><small class="muted">בורוכוב 18, רעננה</small></td>
   <td class="cat">💅 יופי</td>
   <td class="phone"><a href="tel:097602576">097602576</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1383,15 +1401,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097602576">📞</a></td>
 </tr>
 <tr data-id="84" data-name="אורית מכון יופי" data-cat="💅 יופי">
   <td><b>אורית מכון יופי</b><br><small class="muted">אחוזה 148, רעננה</small></td>
   <td class="cat">💅 יופי</td>
   <td class="phone"><a href="tel:0542966298">0542966298</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1399,15 +1417,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972542966298?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="85" data-name="EVE DE PARIS" data-cat="💅 יופי">
   <td><b>EVE DE PARIS</b><br><small class="muted">לוי אשכול 1, רעננה</small></td>
   <td class="cat">💅 יופי</td>
   <td class="phone"><a href="tel:0528556133">0528556133</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1415,15 +1433,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972528556133?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="86" data-name="סלון יופי זאב לוין" data-cat="💅 יופי">
   <td><b>סלון יופי זאב לוין</b><br><small class="muted">אחוזה 68, רעננה</small></td>
   <td class="cat">💅 יופי</td>
   <td class="phone"><a href="tel:099796026">099796026</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1431,15 +1449,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:099796026">📞</a></td>
 </tr>
 <tr data-id="87" data-name="אלה פארם" data-cat="💅 יופי">
   <td><b>אלה פארם</b><br><small class="muted">אחוזה 131, רעננה</small></td>
   <td class="cat">💅 יופי</td>
   <td class="phone"><a href="tel:097746735">097746735</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1447,15 +1465,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097746735">📞</a></td>
 </tr>
 <tr data-id="88" data-name="מכון ליה" data-cat="💅 יופי">
   <td><b>מכון ליה</b><br><small class="muted">אליעזר יפה 51, רעננה</small></td>
   <td class="cat">💅 יופי</td>
   <td class="phone"><a href="tel:097601057">097601057</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1463,15 +1481,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097601057">📞</a></td>
 </tr>
 <tr data-id="89" data-name="טליה שמיר" data-cat="💅 יופי">
   <td><b>טליה שמיר</b><br><small class="muted">אחד העם 2, רעננה</small></td>
   <td class="cat">💅 יופי</td>
   <td class="phone"><a href="tel:0545408336">0545408336</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1479,15 +1497,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972545408336?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="90" data-name="PNINA Cosmetics" data-cat="💅 יופי">
   <td><b>PNINA Cosmetics</b><br><small class="muted">אוסטרובסקי 9, רעננה</small></td>
   <td class="cat">💅 יופי</td>
   <td class="phone"><a href="tel:0547836783">0547836783</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1495,15 +1513,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972547836783?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="91" data-name="כלניות" data-cat="💐 פרחים">
   <td><b>כלניות</b><br><small class="muted">אחוזה 120, רעננה</small></td>
   <td class="cat">💐 פרחים</td>
   <td class="phone"><a href="tel:0774535125">0774535125</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1511,15 +1529,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:0774535125">📞</a></td>
 </tr>
 <tr data-id="92" data-name="שנולינה" data-cat="💐 פרחים">
   <td><b>שנולינה</b><br><small class="muted">היצירה 14, רעננה</small></td>
   <td class="cat">💐 פרחים</td>
   <td class="phone"><a href="tel:0505561222">0505561222</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1527,15 +1545,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972505561222?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="93" data-name="פלאוור פאוור מיטל" data-cat="💐 פרחים">
   <td><b>פלאוור פאוור מיטל</b><br><small class="muted">אחוזה 74, רעננה</small></td>
   <td class="cat">💐 פרחים</td>
   <td class="phone"><a href="tel:097998444">097998444</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1543,15 +1561,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097998444">📞</a></td>
 </tr>
 <tr data-id="94" data-name="חנות הפרחים הקטנה של רוזי" data-cat="💐 פרחים">
   <td><b>חנות הפרחים הקטנה של רוזי</b><br><small class="muted">אוסטרובסקי 41, רעננה</small></td>
   <td class="cat">💐 פרחים</td>
   <td class="phone"><a href="tel:097714790">097714790</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1559,15 +1577,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:097714790">📞</a></td>
 </tr>
 <tr data-id="95" data-name="סטודיו בוטיק" data-cat="💐 פרחים">
   <td><b>סטודיו בוטיק</b><br><small class="muted">אחוזה 115, רעננה</small></td>
   <td class="cat">💐 פרחים</td>
   <td class="phone"><a href="tel:0542313979">0542313979</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1575,15 +1593,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972542313979?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="96" data-name="STAV FRIGE" data-cat="💐 פרחים">
   <td><b>STAV FRIGE</b><br><small class="muted">בורוכוב 3, רעננה</small></td>
   <td class="cat">💐 פרחים</td>
   <td class="phone"><a href="tel:0508123913">0508123913</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1591,15 +1609,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972508123913?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="97" data-name="בונסאי" data-cat="💐 פרחים">
   <td><b>בונסאי</b><br><small class="muted">אחוזה 110, רעננה</small></td>
   <td class="cat">💐 פרחים</td>
   <td class="phone"><a href="tel:0528000709">0528000709</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1607,15 +1625,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972528000709?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="98" data-name="סימפוניית הפרחים" data-cat="💐 פרחים">
   <td><b>סימפוניית הפרחים</b><br><small class="muted">מכבי 30, רעננה</small></td>
   <td class="cat">💐 פרחים</td>
   <td class="phone"><a href="tel:0505237407">0505237407</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1623,15 +1641,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972505237407?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr>
 <tr data-id="99" data-name="פרחי עומר" data-cat="💐 פרחים">
   <td><b>פרחי עומר</b><br><small class="muted">אחוזה 100, רעננה</small></td>
   <td class="cat">💐 פרחים</td>
   <td class="phone"><a href="tel:099579771">099579771</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1639,15 +1657,15 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn call" href="tel:099579771">📞</a></td>
 </tr>
 <tr data-id="100" data-name="Ni noy flowers" data-cat="💐 פרחים">
   <td><b>Ni noy flowers</b><br><small class="muted">אחוזה 164, רעננה</small></td>
   <td class="cat">💐 פרחים</td>
   <td class="phone"><a href="tel:0548788404">0548788404</a></td>
-  <td><select class="status" onchange="saveState()">
+  <td><select class="status" onchange="onChange(this)">
       <option value="pending">🔵 לא נשלח</option>
       <option value="sent">🟡 נשלח</option>
       <option value="replied">🟢 ענה</option>
@@ -1655,57 +1673,171 @@
       <option value="deal">🤝 סיכם</option>
       <option value="no">⚫ לא מעוניין</option>
     </select></td>
-  <td><input type="date" class="date" onchange="saveState()"></td>
-  <td><input type="text" class="note" placeholder="הערה..." oninput="saveState()"></td>
+  <td><input type="date" class="date" onchange="onChange(this)"></td>
+  <td><input type="text" class="note" placeholder="הערה..." oninput="onChange(this)"></td>
   <td class="wa"><a class="wa-btn" target="_blank" href="https://wa.me/972548788404?text=%D7%A9%D7%9C%D7%95%D7%9D%21%20%D7%90%D7%A0%D7%99%20%D7%A0%D7%93%D7%91%2C%20%D7%9E%D7%A0%D7%94%D7%9C%20%D7%9E%D7%A8%D7%9B%D7%96%20%D7%92%D7%99%D7%A8%D7%95%D7%9F%20%D7%91%D7%96%27%D7%91%D7%95%D7%98%D7%99%D7%A0%D7%A1%D7%A7%D7%99%205%20%D7%91%D7%A8%D7%A2%D7%A0%D7%A0%D7%94.%20%D7%94%D7%9E%D7%A8%D7%9B%D7%96%20%D7%A2%D7%91%D7%A8%20%D7%A9%D7%99%D7%A4%D7%95%D7%A5%20%D7%95%D7%A4%D7%AA%D7%97%20%D7%A9%D7%98%D7%97%D7%99%D7%9D%20%D7%A4%D7%A0%D7%95%D7%99%D7%99%D7%9D%20%D7%91%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D%20%D7%90%D7%98%D7%A8%D7%A7%D7%98%D7%99%D7%91%D7%99%D7%99%D7%9D%20%D7%A2%D7%9D%20%D7%94%D7%98%D7%91%D7%95%D7%AA%20%D7%9C%D7%A9%D7%95%D7%9B%D7%A8%D7%99%D7%9D%20%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%99%D7%9D.%20%D7%90%D7%A4%D7%A9%D7%A8%20%D7%9C%D7%A9%D7%9C%D7%95%D7%97%20%D7%A4%D7%A8%D7%98%D7%99%D7%9D%3F%20052-3668488">💬</a></td>
 </tr></tbody>
   </table>
-  <div class="footer">מרכז גירון · ז'בוטינסקי 5 רעננה · העוזר של נדב</div>
+  <div class="footer">מרכז גירון · ז'בוטינסקי 5 רעננה · סנכרון אוטומטי</div>
 </div>
-<div class="toast" id="toast">✅ נשמר</div>
+<div class="toast" id="toast"></div>
 <script>
-const STORAGE_KEY = 'giron_tracker_v1';
-function load() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch(e) { return {}; }
+const LS_KEY = 'giron_tracker_sync_v1';
+const CFG_KEY = 'giron_tracker_cfg_v1';
+let saveTimer = null;
+let lastState = '';
+
+function loadCfg() {
+  try { return JSON.parse(localStorage.getItem(CFG_KEY)) || {}; } catch(e) { return {}; }
 }
-function saveState() {
+function saveCfg(c) {
+  localStorage.setItem(CFG_KEY, JSON.stringify(c));
+}
+function collectState() {
   const st = {};
   document.querySelectorAll('#tbody tr').forEach(tr => {
-    const id = tr.dataset.id;
-    st[id] = {
+    st[tr.dataset.id] = {
       status: tr.querySelector('.status').value,
       date: tr.querySelector('.date').value,
       note: tr.querySelector('.note').value
     };
   });
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(st));
-  updateStats();
-  showToast();
+  return st;
 }
-function apply() {
-  const st = load();
+function applyState(st) {
   document.querySelectorAll('#tbody tr').forEach(tr => {
-    const id = tr.dataset.id;
-    const s = st[id];
+    const s = st && st[tr.dataset.id];
     if (s) {
       tr.querySelector('.status').value = s.status || 'pending';
       tr.querySelector('.date').value = s.date || '';
       tr.querySelector('.note').value = s.note || '';
+    } else {
+      tr.querySelector('.status').value = 'pending';
+      tr.querySelector('.date').value = '';
+      tr.querySelector('.note').value = '';
     }
     tr.classList.remove('row-sent','row-replied','row-deal','row-no');
     const v = tr.querySelector('.status').value;
     if (v === 'sent') tr.classList.add('row-sent');
-    if (v === 'replied') tr.classList.add('row-replied');
-    if (v === 'tour') tr.classList.add('row-replied');
+    if (v === 'replied' || v === 'tour') tr.classList.add('row-replied');
     if (v === 'deal') tr.classList.add('row-deal');
     if (v === 'no') tr.classList.add('row-no');
   });
-  // fill cat filter
-  const cf = document.getElementById('catFilter');
-  const cats = new Set();
-  document.querySelectorAll('#tbody tr').forEach(tr => cats.add(tr.dataset.cat));
-  cf.innerHTML = '<option value="">כל הקטגוריות</option>' + [...cats].map(c => `<option value="${c}">${c}</option>`).join('');
-  updateStats();
+}
+function syncUi() {
+  const cfg = loadCfg();
+  document.getElementById('cfgBinId').value = cfg.binId || '';
+  document.getElementById('cfgKey').value = cfg.key || '';
+  if (cfg.binId && cfg.key) {
+    document.getElementById('syncStatus').textContent = '☁️ מסונכרן לענן';
+    document.getElementById('syncStatus').className = 'sync-status cloud';
+  } else {
+    document.getElementById('syncStatus').textContent = '💾 שמירה מקומית בלבד (ללא ענן)';
+    document.getElementById('syncStatus').className = 'sync-status local';
+  }
+}
+function onChange(el) {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    const cfg = loadCfg();
+    if (cfg.binId && cfg.key) {
+      pushCloud();
+    } else {
+      localStorage.setItem(LS_KEY, JSON.stringify(collectState()));
+      showToast('✅ נשמר מקומית (חבר ענן בהגדרות)');
+      updateStats();
+    }
+  }, 600);
+}
+async function pushCloud() {
+  const cfg = loadCfg();
+  const st = collectState();
+  const payload = { updated: new Date().toISOString(), state: st };
+  try {
+    const r = await fetch('https://api.jsonbin.io/v3/b/' + cfg.binId, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Master-Key': cfg.key,
+        'X-Bin-Versioning': 'false'
+      },
+      body: JSON.stringify(payload)
+    });
+    if (r.ok) {
+      localStorage.setItem(LS_KEY, JSON.stringify(st));
+      showToast('☁️ נשמר בענן');
+      updateStats();
+    } else {
+      showToast('❌ שגיאת שמירה בענן (' + r.status + ')', true);
+    }
+  } catch(e) {
+    showToast('❌ אין חיבור לענן', true);
+  }
+}
+async function pullCloud() {
+  const cfg = loadCfg();
+  if (!cfg.binId || !cfg.key) return;
+  try {
+    const r = await fetch('https://api.jsonbin.io/v3/b/' + cfg.binId + '/latest', {
+      headers: { 'X-Master-Key': cfg.key }
+    });
+    if (r.ok) {
+      const j = await r.json();
+      const data = j.record || j;
+      if (data && data.state) {
+        applyState(data.state);
+        localStorage.setItem(LS_KEY, JSON.stringify(data.state));
+        updateStats();
+      }
+    }
+  } catch(e) {}
+}
+async function testCloud() {
+  const cfg = loadCfg();
+  const msg = document.getElementById('cloudMsg');
+  if (!cfg.binId || !cfg.key) { msg.textContent = '❌ מלא Bin ID ומפתח קודם'; return; }
+  msg.textContent = '⏳ בודק...';
+  try {
+    const r = await fetch('https://api.jsonbin.io/v3/b/' + cfg.binId + '/latest', {
+      headers: { 'X-Master-Key': cfg.key }
+    });
+    if (r.ok) {
+      const j = await r.json();
+      const data = j.record || j;
+      msg.textContent = '✅ החיבור עובד! נטען מהענן';
+      if (data && data.state) applyState(data.state);
+      syncUi(); updateStats();
+      showToast('☁️ התחבר לענן');
+    } else {
+      msg.textContent = '❌ שגיאה: ' + r.status + '. בדוק Bin ID ומפתח';
+    }
+  } catch(e) { msg.textContent = '❌ אין חיבור'; }
+}
+function saveConfig() {
+  const cfg = {
+    binId: document.getElementById('cfgBinId').value.trim(),
+    key: document.getElementById('cfgKey').value.trim()
+  };
+  if (!cfg.binId || !cfg.key) { showToast('❌ מלא את שני השדות', true); return; }
+  saveCfg(cfg);
+  syncUi();
+  testCloud();
+}
+function toggleConfig() {
+  document.getElementById('configWrap').classList.toggle('open');
+}
+function updateStats() {
+  const st = collectState();
+  const counts = {sent:0, replied:0, tour:0, deal:0, no:0};
+  Object.values(st).forEach(s => { if (counts[s.status] !== undefined) counts[s.status]++; });
+  const el = document.getElementById('stats');
+  el.innerHTML = `
+    <div class="stat"><b>${counts.sent}</b>🟡 נשלח</div>
+    <div class="stat"><b>${counts.replied}</b>🟢 ענה</div>
+    <div class="stat"><b>${counts.tour}</b>📅 סיור</div>
+    <div class="stat"><b>${counts.deal}</b>🤝 סיכם</div>
+    <div class="stat"><b>${counts.no}</b>⚫ לא מעוניין</div>
+    <div class="stat"><b>${Object.values(st).filter(s => s.status === 'pending').length}</b>🔵 ממתינים</div>`;
 }
 function applyFilters() {
   const q = document.getElementById('q').value.trim().toLowerCase();
@@ -1722,52 +1854,54 @@ function applyFilters() {
     tr.style.display = ok ? '' : 'none';
   });
 }
-function updateStats() {
-  const st = load();
-  const total = Object.keys(st).length;
-  const counts = {sent:0, replied:0, tour:0, deal:0, no:0};
-  Object.values(st).forEach(s => { if (counts[s.status] !== undefined) counts[s.status]++; });
-  const el = document.getElementById('stats');
-  el.innerHTML = `
-    <div class="stat"><b>${Object.keys(st).length || 0}</b>סומנו</div>
-    <div class="stat"><b>${counts.sent}</b>🟡 נשלח</div>
-    <div class="stat"><b>${counts.replied}</b>🟢 ענה</div>
-    <div class="stat"><b>${counts.tour}</b>📅 סיור</div>
-    <div class="stat"><b>${counts.deal}</b>🤝 סיכם</div>
-    <div class="stat"><b>${counts.no}</b>⚫ לא מעוניין</div>`;
-}
 function exportJSON() {
-  const blob = new Blob([localStorage.getItem(STORAGE_KEY)], {type:'application/json'});
+  const st = collectState();
+  const payload = { updated: new Date().toISOString(), state: st };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'giron-tracker-backup-' + new Date().toISOString().slice(0,10) + '.json';
+  a.download = 'giron-tracker-' + new Date().toISOString().slice(0,10) + '.json';
   a.click();
 }
 function importJSON(e) {
   const f = e.target.files[0];
   if (!f) return;
   const r = new FileReader();
-  r.onload = () => { localStorage.setItem(STORAGE_KEY, r.result); apply(); showToast('✅ יובא'); };
+  r.onload = () => {
+    try {
+      const j = JSON.parse(r.result);
+      const st = (j && j.state) ? j.state : j;
+      applyState(st);
+      const cfg = loadCfg();
+      if (cfg.binId && cfg.key) pushCloud(); else { localStorage.setItem(LS_KEY, JSON.stringify(st)); showToast('✅ יובא ונשמר'); }
+      updateStats();
+    } catch(err) { showToast('❌ קובץ לא תקין', true); }
+  };
   r.readAsText(f);
 }
-function resetAll() {
-  if (!confirm('למחוק את כל הסטטוסים?')) return;
-  localStorage.removeItem(STORAGE_KEY);
-  document.querySelectorAll('#tbody tr').forEach(tr => {
-    tr.querySelector('.status').value = 'pending';
-    tr.querySelector('.date').value = '';
-    tr.querySelector('.note').value = '';
-    tr.className = '';
-  });
-  updateStats();
-}
-function showToast(msg) {
+function showToast(msg, isErr) {
   const t = document.getElementById('toast');
-  t.textContent = msg || '✅ נשמר';
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 1500);
+  t.textContent = msg;
+  t.className = 'toast show' + (isErr ? ' err' : '');
+  setTimeout(() => t.className = 'toast', 2200);
 }
-apply();
+// init: fill cat filter + try cloud
+(function init() {
+  const cf = document.getElementById('catFilter');
+  const cats = new Set();
+  document.querySelectorAll('#tbody tr').forEach(tr => cats.add(tr.dataset.cat));
+  cf.innerHTML = '<option value="">כל הקטגוריות</option>' + [...cats].map(c => `<option value="${c}">${c}</option>`).join('');
+  syncUi();
+  const cfg = loadCfg();
+  if (cfg.binId && cfg.key) {
+    pullCloud().then(() => { updateStats(); showToast('☁️ נטען מהענן'); });
+  } else {
+    try {
+      const saved = JSON.parse(localStorage.getItem(LS_KEY));
+      if (saved) { applyState(saved); updateStats(); }
+    } catch(e) { updateStats(); }
+  }
+})();
 </script>
 </body>
 </html>
