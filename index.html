@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>מרכז גירון רעננה — נכסים פנויים להשכרה</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: #f7f8fa; color: #1a1a2e;
+    line-height: 1.6;
+  }
+  .hero {
+    background: linear-gradient(160deg, #ffffff 0%, #f0f2f8 100%);
+    text-align: center;
+    padding: 48px 20px 36px;
+    border-bottom: 1px solid #e8eaf0;
+  }
+  .hero img { max-width: 240px; height: auto; margin-bottom: 18px; }
+  .hero h1 { font-size: 2em; color: #1a1a2e; margin-bottom: 6px; }
+  .hero .subtitle { font-size: 1.15em; color: #4a4a68; margin-bottom: 8px; }
+  .hero .address { font-size: .95em; color: #6b6b85; }
+  .hero .tagline {
+    display: inline-block; margin-top: 16px; padding: 8px 22px;
+    background: linear-gradient(135deg, #5b2a86, #e31e63, #ff6a00);
+    color: #fff; border-radius: 30px; font-weight: 700; font-size: .95em;
+  }
+  .stats-bar {
+    display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 10px; background: #fff; border-bottom: 1px solid #e8eaf0;
+  }
+  .stat {
+    background: #f4f0fa; border-radius: 12px; padding: 8px 18px;
+    font-size: .88em; font-weight: 600; color: #5b2a86;
+  }
+  .section { max-width: 980px; margin: 0 auto; padding: 30px 16px 10px; }
+  .section h2 {
+    font-size: 1.4em; color: #1a1a2e; margin-bottom: 4px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .section .desc { color: #6b6b85; font-size: .95em; margin-bottom: 16px; }
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+  }
+  .unit {
+    background: #fff; border-radius: 14px; padding: 16px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.05);
+    border-top: 4px solid #e31e63;
+    transition: transform .15s;
+  }
+  .unit:hover { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(0,0,0,.1); }
+  .unit.office { border-top-color: #5b2a86; }
+  .unit.big { border-top-color: #ff6a00; }
+  .unit .name { font-weight: 700; font-size: 1.05em; color: #1a1a2e; }
+  .unit .area { color: #4a4a68; font-size: .92em; margin-top: 4px; }
+  .unit .area b { color: #e31e63; font-size: 1.15em; }
+  .unit.office .area b { color: #5b2a86; }
+  .unit.big .area b { color: #ff6a00; }
+  .unit .use { font-size: .8em; color: #8a8aa0; margin-top: 6px; }
+  .cta {
+    background: linear-gradient(135deg, #5b2a86, #e31e63);
+    color: #fff; text-align: center; padding: 36px 20px; margin-top: 30px;
+    border-radius: 20px; max-width: 900px; margin-left: auto; margin-right: auto;
+  }
+  .cta h2 { font-size: 1.5em; margin-bottom: 8px; color: #fff; }
+  .cta p { opacity: .92; margin-bottom: 18px; }
+  .cta .phone {
+    display: inline-block; background: #fff; color: #e31e63;
+    font-size: 1.3em; font-weight: 800; padding: 12px 32px; border-radius: 40px;
+    text-decoration: none; margin: 0 6px;
+  }
+  .cta .mail {
+    display: inline-block; color: #fff; text-decoration: underline;
+    font-size: 1.05em; margin-top: 12px;
+  }
+  .why {
+    max-width: 980px; margin: 0 auto; padding: 24px 16px;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;
+  }
+  .why .item {
+    background: #fff; border-radius: 14px; padding: 18px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.04); text-align: center;
+  }
+  .why .item .icon { font-size: 1.8em; margin-bottom: 8px; }
+  .why .item .t { font-weight: 700; margin-bottom: 4px; }
+  .why .item .d { font-size: .85em; color: #6b6b85; }
+  .note {
+    max-width: 900px; margin: 10px auto 40px; padding: 14px 18px;
+    background: #fdf6ec; border-radius: 12px; font-size: .85em; color: #7a5a2a;
+    text-align: center;
+  }
+  .footer { text-align: center; color: #9a9ab0; font-size: .8em; padding: 20px; }
+  @media print {
+    body { background: #fff; }
+    .hero { padding: 30px 10px; }
+    .cta { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <img src="logo.jpg" alt="מרכז גירון">
+  <h1>מרכז גירון רעננה</h1>
+  <div class="subtitle">כל מה שצריך, בדיוק איפה שנוח</div>
+  <div class="address">📍 ז'בוטינסקי 5, רעננה · המרכז השכונתי המחודש</div>
+  <div class="tagline">🏪 הזדמנויות להשכרה — מסחר · הסעדה · משרדים</div>
+</div>
+
+<div class="stats-bar">
+  <span class="stat">🏪 11 חנויות פנויות</span>
+  <span class="stat">🏢 משרדים גמישים בקומות 1-2</span>
+  <span class="stat">🅿️ חניון + מיקום מרכזי</span>
+  <span class="stat">👥 קהל קבוע + נגישות מצוינת</span>
+</div>
+
+<!-- ===== חנויות ===== -->
+<div class="section">
+  <h2>🏪 חנויות על הקרקע — קומת מסחר</h2>
+  <div class="desc">מיקום מושלם למותג שרוצה להיות קרוב לקהילה וללקוחות · שטחים מ-25 מ"ר עד 220 מ"ר · מסומנות בכחול בתכנית המרכז</div>
+  <div class="grid">
+    <div class="unit"><div class="name">חנות מס' 2</div><div class="area"><b>58.3</b> מ"ר</div><div class="use">מסחר</div></div>
+    <div class="unit"><div class="name">חנות מס' 3</div><div class="area"><b>56.7</b> מ"ר</div><div class="use">מסחר</div></div>
+    <div class="unit"><div class="name">חנות מס' 4</div><div class="area"><b>49.5</b> מ"ר</div><div class="use">מסחר</div></div>
+    <div class="unit"><div class="name">חנות מס' 5</div><div class="area"><b>74.3</b> מ"ר</div><div class="use">מסחר / הסעדה</div></div>
+    <div class="unit"><div class="name">חנות מס' 6</div><div class="area"><b>60.5</b> מ"ר</div><div class="use">מסחר</div></div>
+    <div class="unit big"><div class="name">חנות מס' 7</div><div class="area"><b>220</b> מ"ר</div><div class="use">🎯 שטח גדול — סופר / מרכז מסחרי / חדר כושר</div></div>
+    <div class="unit big"><div class="name">חנות מס' 8</div><div class="area"><b>100.1</b> מ"ר</div><div class="use">מסחר רחב</div></div>
+    <div class="unit"><div class="name">חנות מס' 9</div><div class="area"><b>51.7</b> מ"ר</div><div class="use">מסחר</div></div>
+    <div class="unit"><div class="name">חנות מס' 10</div><div class="area"><b>33</b> מ"ר</div><div class="use">מסחר / בוטיק</div></div>
+    <div class="unit"><div class="name">חנות מס' 11</div><div class="area"><b>25.3</b> מ"ר</div><div class="use">קיוסק / בוטיק / נקודת מכירה</div></div>
+  </div>
+</div>
+
+<!-- ===== משרדים ===== -->
+<div class="section">
+  <h2>🏢 משרדים פנויים — גמישות מלאה</h2>
+  <div class="desc">משרדים בקומות 1-2 · יחידות בודדות או שילוב שטחים לפי דרישה · מחיר ותנאים לפי דרישה</div>
+  <div class="grid">
+    <div class="unit office"><div class="name">קומה 1 · יח' 122</div><div class="area"><b>24</b> מ"ר</div><div class="use">משרד</div></div>
+    <div class="unit office"><div class="name">קומה 1 · יח' 115</div><div class="area"><b>19.8</b> מ"ר</div><div class="use">משרד קטן</div></div>
+    <div class="unit office"><div class="name">קומה 1 · יח' 114</div><div class="area"><b>74.8</b> מ"ר</div><div class="use">משרד גדול</div></div>
+    <div class="unit office"><div class="name">קומה 2 · יח' 216</div><div class="area"><b>18.7</b> מ"ר</div><div class="use">משרד קטן</div></div>
+    <div class="unit office"><div class="name">קומה 2 · יח' 209</div><div class="area"><b>63.8</b> מ"ר</div><div class="use">משרד</div></div>
+    <div class="unit office"><div class="name">קומה 2 · יח' 208</div><div class="area"><b>58.3</b> מ"ר</div><div class="use">משרד</div></div>
+    <div class="unit office"><div class="name">קומה 2 · יח' זילבר</div><div class="area"><b>40.7</b> מ"ר</div><div class="use">משרד</div></div>
+  </div>
+</div>
+
+<!-- ===== למה כאן ===== -->
+<div class="why">
+  <div class="item"><div class="icon">📍</div><div class="t">מיקום מרכזי</div><div class="d">ז'בוטינסקי 5 — בלב השכונתי של רעננה</div></div>
+  <div class="item"><div class="icon">🅿️</div><div class="t">חניון ללקוחות</div><div class="d">חניון + מיקום מרכזי לנוחות הלקוחות שלך</div></div>
+  <div class="item"><div class="icon">👥</div><div class="t">קהל קבוע</div><div class="d">מרכז שכונתי מחודש עם תנועת לקוחות קבועה</div></div>
+  <div class="item"><div class="icon">🚗</div><div class="t">נגישות מצוינת</div><div class="d">גישה נוחה מתחבורה ציבורית ורכב פרטי</div></div>
+  <div class="item"><div class="icon">🏬</div><div class="t">הכל תחת קורת גג אחת</div><div class="d">מסחר, הסעדה ומשרדים — סינרגיה בין עסקים</div></div>
+</div>
+
+<!-- ===== CTA ===== -->
+<div class="cta">
+  <h2>מקום נכון למותג שרוצה להיות קרוב לקהילה</h2>
+  <p>לתיאום סיור ולקבלת פרטים:</p>
+  <div>
+    <a class="phone" href="tel:0523668488">📞 052-3668488</a>
+  </div>
+  <div>
+    <a class="mail" href="mailto:nadavk@giron.co.il">nadavk@giron.co.il · נדב קוטאי</a>
+  </div>
+</div>
+
+<div class="note">💡 מחיר ותנאים לפי דרישה · ניתן לשלב יחידות משרדים סמוכות · לתכנית הקומה ולסיור פיזי — צרו קשר</div>
+
+<div class="footer">מרכז גירון · נכסים פנויים להשכרה · נדב קוטאי · 052-3668488</div>
+
+</body>
+</html>
